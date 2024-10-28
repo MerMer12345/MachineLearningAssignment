@@ -1,4 +1,4 @@
-#Maschine Learning Assignment
+Machine Learning (COM624)
 
 Waterfall model
 
