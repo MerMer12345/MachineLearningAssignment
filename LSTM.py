@@ -62,34 +62,6 @@ print("Test Loss (MSE):", test_loss)
 print("Test MAE:", test_mae)
 
 # -------------------------------------------------------------
-# 1. DATA VISUALIZATION
-# -------------------------------------------------------------
-
-# Correlation heatmap
-plt.figure(figsize=(12, 8))
-sns.heatmap(data_cleaned[numeric_columns].corr(), annot=True, fmt=".2f", cmap="coolwarm")
-plt.title("Correlation Heatmap")
-plt.show()
-
-# Distribution of the target variable
-plt.figure(figsize=(8, 6))
-sns.histplot(data_cleaned['Savings for Property (£)'], kde=True, bins=30, color='skyblue')
-plt.title("Distribution of Savings for Property (£)")
-plt.xlabel("Savings for Property (£)")
-plt.ylabel("Frequency")
-plt.show()
-
-# Predicted vs True Values Plot
-plt.figure(figsize=(10, 6))
-plt.plot(true_values[:50], label='True Values', marker='o')  # Limit to 50 for clarity
-plt.plot(predicted_values[:50], label='Predicted Values', marker='x')
-plt.title("True vs Predicted Savings for Property (£)")
-plt.xlabel("Sample Index")
-plt.ylabel("Savings (£)")
-plt.legend()
-plt.show()
-
-# -------------------------------------------------------------
 # 2. DECISION-MAKING SUPPORT
 # -------------------------------------------------------------
 
