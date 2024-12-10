@@ -3,15 +3,34 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.pyplot import xlabel, ylabel
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 import plotly.graph_objects as go
 from sklearn.cluster import KMeans
 from prophet import Prophet
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # Main title
-st.title("Personal Finance Management System with LSTM and Interactive Features")
+st.title("Personal Finance Management System with Forecasting and Interactive Features")
+
+# Load data only once
+@st.cache_data
+def load_data(file_path):
+    return pd.read_csv(file_path)
+
+# Load the data
+try:
+    data_cleaned = load_data("personal_finance_employees_More_Months.csv")
+except Exception as e:
+    st.error(f"Error loading data: {e}")
+    st.stop()
+
+# Select employee at the beginning
+employees = data_cleaned['Employee'].unique()
+selected_employee = st.sidebar.selectbox("Select an Employee:", employees)
 
 # Define sections/pages
 sections = [
@@ -24,21 +43,13 @@ sections = [
 ]
 selected_section = st.selectbox("Navigate to:", sections)
 
-# Load data only once
-@st.cache_data
-def load_data(file_path):
-    return pd.read_csv(file_path)
-
-# Load the data
-try:
-    data_cleaned = load_data("personal_finance_employees_V1.csv")
-except Exception as e:
-    st.error(f"Error loading data: {e}")
-    st.stop()
-
+# Step 1: Introduction
+if selected_section == "Introduction":
+    st.write("Welcome to the Personal Finance Management System.")
+    st.write(f"Currently analyzing data for {selected_employee}.")
 
 # Step 2: Data Visualization
-if selected_section == "Data Visualization":
+elif selected_section == "Data Visualization":
     st.subheader("Data Visualization")
 
     # Visualization options
@@ -50,14 +61,15 @@ if selected_section == "Data Visualization":
     selected_viz = st.selectbox("Select Visualization Type:", viz_options)
 
     if selected_viz == "Pie Chart (Expenses Breakdown)":
-        # Pie Chart Visualization
-        employees = data_cleaned['Employee'].unique()
-        selected_employee = st.selectbox("Select an Employee:", employees)
-
         try:
+            # Date Selection
+            dates = data_cleaned[data_cleaned['Employee'] == selected_employee]['Date'].unique()
+            selected_date = st.selectbox("Select a Date:", dates)
+
             # Calculate categorized expenses
             df_corrdata = {
                 'Employee': data_cleaned['Employee'],
+                'Date': data_cleaned['Date'],
                 'Bills': data_cleaned['Electricity Bill (£)'] + data_cleaned['Gas Bill (£)'] + data_cleaned['Water Bill (£)'],
                 'Entertainment': data_cleaned['Amazon Prime (£)'] + data_cleaned['Netflix (£)'] + data_cleaned['Sky Sports (£)'],
                 'Transport': data_cleaned['Transportation (£)'],
@@ -65,26 +77,32 @@ if selected_section == "Data Visualization":
             }
             df_corrdata = pd.DataFrame(df_corrdata)
 
-            # Filter for the selected employee
-            subframe = df_corrdata[df_corrdata['Employee'] == selected_employee].drop(columns=['Employee'])
+            # Filter for the selected employee and date
+            subframe = df_corrdata[
+                (df_corrdata['Employee'] == selected_employee) &
+                (df_corrdata['Date'] == selected_date)
+                ].drop(columns=['Employee', 'Date'])
 
-            # Prepare data for the pie chart
-            expenses = subframe.iloc[0]  # Select the first (and only) row of the subframe
-            labels = expenses.index
-            sizes = expenses.values
+            # Check if the subframe has data
+            if not subframe.empty:
+                # Prepare data for the pie chart
+                expenses = subframe.iloc[0]  # Select the first (and only) row of the subframe
+                labels = expenses.index
+                sizes = expenses.values
 
-            # Create the pie chart
-            fig = go.Figure(
-                data=[go.Pie(labels=labels, values=sizes, hole=0.3)],
-                layout_title_text=f"Expenses Breakdown for {selected_employee}"
-            )
-            st.plotly_chart(fig)
+                # Create the pie chart
+                fig = go.Figure(
+                    data=[go.Pie(labels=labels, values=sizes, hole=0.3)],
+                    layout_title_text=f"Expenses Breakdown for {selected_employee} on {selected_date}"
+                )
+                st.plotly_chart(fig)
+            else:
+                st.warning("No data available for the selected employee and date.")
 
         except Exception as e:
             st.error(f"Pie chart error: {e}")
 
     elif selected_viz == "Correlation Matrix (Heatmap)":
-        # Correlation Matrix Visualization
         try:
             df_corrdata = {
                 'Income': data_cleaned['Monthly Income (£)'],
@@ -109,99 +127,222 @@ if selected_section == "Data Visualization":
             st.error(f"Heatmap error: {e}")
 
     elif selected_viz == "KMeans Clustering Analysis":
-        # KMeans Clustering Visualization
-        try:
-            # Prepare data for clustering
-            data_cleaned.fillna(0, inplace=True)
-            df_KmeansData = {
-                'Income': data_cleaned['Monthly Income (£)'],
-                'Spendings': data_cleaned['Electricity Bill (£)'] + data_cleaned['Gas Bill (£)'] +
-                              data_cleaned['Netflix (£)'] + data_cleaned['Amazon Prime (£)'] +
-                              data_cleaned['Groceries (£)'] + data_cleaned['Transportation (£)'] +
-                              data_cleaned['Water Bill (£)'] + data_cleaned['Sky Sports (£)'] +
-                              data_cleaned['Other Expenses (£)'] + data_cleaned['Savings for Property (£)'] +
-                              data_cleaned['Monthly Outing (£)']
-            }
-            df_KmeansData = pd.DataFrame(df_KmeansData)
 
-            # Elbow Method
-            SumSquaresInClusters = []
-            for i in range(1, 11):
-                kmeans = KMeans(n_clusters=i, init='k-means++', random_state=11)
-                kmeans.fit(df_KmeansData)
-                SumSquaresInClusters.append(kmeans.inertia_)
+        try:
+
+            # Prepare data for clustering
+
+            data_cleaned.fillna(0, inplace=True)
+
+            df_kmeans_data = pd.DataFrame({
+
+                'Income': data_cleaned['Monthly Income (£)'],
+
+                'Spendings': (
+
+                        data_cleaned['Electricity Bill (£)'] +
+
+                        data_cleaned['Gas Bill (£)'] +
+
+                        data_cleaned['Netflix (£)'] +
+
+                        data_cleaned['Amazon Prime (£)'] +
+
+                        data_cleaned['Groceries (£)'] +
+
+                        data_cleaned['Transportation (£)'] +
+
+                        data_cleaned['Water Bill (£)'] +
+
+                        data_cleaned['Sky Sports (£)'] +
+
+                        data_cleaned['Other Expenses (£)'] +
+
+                        data_cleaned['Savings for Property (£)'] +
+
+                        data_cleaned['Monthly Outing (£)']
+
+                )
+
+            })
+
+
+            # Elbow Method for optimal number of clusters
+
+            def calculate_elbow(data, max_clusters=10):
+
+                inertia_values = []
+
+                for i in range(1, max_clusters + 1):
+                    kmeans = KMeans(n_clusters=i, init='k-means++', random_state=11)
+
+                    kmeans.fit(data)
+
+                    inertia_values.append(kmeans.inertia_)
+
+                return inertia_values
+
+
+            sum_squares_in_clusters = calculate_elbow(df_kmeans_data)
+
+            # Plot Elbow Curve
+
+            fig_elbow, ax_elbow = plt.subplots()
+
+            ax_elbow.plot(range(1, 11), sum_squares_in_clusters, marker='o', linestyle='--')
+
+            ax_elbow.set_title('Elbow Method for Optimal Clusters')
+
+            ax_elbow.set_xlabel('Number of Clusters')
+
+            ax_elbow.set_ylabel('Inertia')
+
+            st.pyplot(fig_elbow)
 
             # Apply KMeans with 3 clusters
+
             kmeans = KMeans(n_clusters=3, init='k-means++', random_state=11)
-            y_kmeans = kmeans.fit_predict(df_KmeansData)
+
+            y_kmeans = kmeans.fit_predict(df_kmeans_data)
 
             # Plot clustered data
-            fig, ax = plt.subplots()
-            ax.scatter(df_KmeansData.values[y_kmeans == 0, 0], df_KmeansData.values[y_kmeans == 0, 1], c='red', label='Cluster 1')
-            ax.scatter(df_KmeansData.values[y_kmeans == 1, 0], df_KmeansData.values[y_kmeans == 1, 1], c='blue', label='Cluster 2')
-            ax.scatter(df_KmeansData.values[y_kmeans == 2, 0], df_KmeansData.values[y_kmeans == 2, 1], c='yellow', label='Cluster 3')
-            ax.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], s=100, c='grey', label='Centroids')
-            ax.set_xlabel('Income')
-            ax.set_ylabel('Spendings')
-            ax.legend()
-            st.pyplot(fig)
+
+            fig_clusters, ax_clusters = plt.subplots()
+
+            colors = ['red', 'blue', 'yellow']
+
+            for cluster in range(3):
+                ax_clusters.scatter(
+
+                    df_kmeans_data.values[y_kmeans == cluster, 0],
+
+                    df_kmeans_data.values[y_kmeans == cluster, 1],
+
+                    c=colors[cluster],
+
+                    label=f'Cluster {cluster + 1}'
+
+                )
+
+            ax_clusters.scatter(
+
+                kmeans.cluster_centers_[:, 0],
+
+                kmeans.cluster_centers_[:, 1],
+
+                s=200, c='grey', marker='X', label='Centroids'
+
+            )
+
+            ax_clusters.set_xlabel('Income (£)')
+
+            ax_clusters.set_ylabel('Spendings (£)')
+
+            ax_clusters.set_title('KMeans Clustering Results')
+
+            ax_clusters.legend()
+
+            st.pyplot(fig_clusters)
+
+
+        except KeyError as ke:
+
+            st.error(f"Missing data columns for clustering: {ke}")
+
+        except ValueError as ve:
+
+            st.error(f"Value error in clustering process: {ve}")
 
         except Exception as e:
-            st.error(f"KMeans clustering error: {e}")
 
-#step 3: Forecasting
+            st.error(f"An unexpected error occurred: {e}")
+
+# Step 3: Forecasting
 elif selected_section == "Forecasting":
-    st.subheader("Step 3: Forecasting with Facebook Prophet")
+    st.subheader("Forecasting with Multiple Models")
 
     try:
-        # Select employee
-        employees = data_cleaned['Employee'].unique()
-        selected_employee = st.selectbox("Select an employee", employees)
-
         # Filter data for the selected employee
         employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee][['Date', 'Monthly Income (£)']]
+        employee_data['Date'] = pd.to_datetime(employee_data['Date'])
         employee_data.rename(columns={"Date": "ds", "Monthly Income (£)": "y"}, inplace=True)
 
-        # Forecasting using Prophet
-        model = Prophet()
-        model.fit(employee_data)
+        # Model selection
+        models = ["Facebook Prophet", "ARIMA", "SARIMAX"]
+        selected_model = st.selectbox("Select a forecasting model", models)
 
-        # Create future dataframe
-        future = model.make_future_dataframe(periods=1, freq='M')
+        if selected_model == "Facebook Prophet":
+            model = Prophet()
+            model.fit(employee_data)
 
-        # Forecast
-        forecast = model.predict(future)
+            future = model.make_future_dataframe(periods=1, freq='Y')  # Forecasting for the next year
+            forecast = model.predict(future)
 
-        # Plot forecast
-        st.write(f"### Monthly Income Forecast for {selected_employee}")
-        fig = model.plot(forecast)
-        st.pyplot(fig)
+            st.write(f"### Monthly Income Forecast for {selected_employee} using Prophet")
+            fig = model.plot(forecast)
+            st.pyplot(fig)
 
-        # Display forecast components
-        st.write("### Forecast Components")
-        fig_components = model.plot_components(forecast)
-        st.pyplot(fig_components)
+        elif selected_model == "ARIMA":
+            employee_data.set_index('ds', inplace=True)
+
+            model = ARIMA(employee_data['y'], order=(1, 1, 1))
+            model_fit = model.fit()
+
+            forecast = model_fit.forecast(steps=12)
+            st.write(f"### Monthly Income Forecast for {selected_employee} using ARIMA")
+            st.line_chart(forecast)
+
+        elif selected_model == "SARIMAX":
+            employee_data.set_index('ds', inplace=True)
+
+            model = SARIMAX(employee_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+            model_fit = model.fit()
+
+            forecast = model_fit.get_forecast(steps=12)
+            forecast_df = forecast.conf_int()
+            forecast_df["Forecast"] = forecast.predicted_mean
+
+            st.write(f"### Monthly Income Forecast for {selected_employee} using SARIMAX")
+            st.line_chart(forecast_df["Forecast"])
+
     except Exception as e:
-        st.error(f"Prophet forecasting error: {e}")
+        st.error(f"Forecasting error: {e}")
 
 # Step 4: Decision-Making Support
 elif selected_section == "Decision-Making Support":
-    st.subheader("Step 4: Decision-Making Support")
-    try:
-        current_savings = data_cleaned['Savings for Property (£)'].iloc[-1]
-        interval = st.selectbox("Select Interval:", ["Daily", "Weekly", "Monthly"])
-        savings_goal = st.number_input("Set Your Savings Target (£):", min_value=0.0, step=100.0)
+    st.subheader("Decision-Making Support")
 
-        if current_savings < savings_goal:
-            st.warning(f"You need to save an additional £{savings_goal - current_savings:.2f} to meet your target.")
+    try:
+        employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee]
+
+        if employee_data.empty:
+            st.warning("No data available for the selected employee.")
         else:
-            st.success("Congratulations! You have met your savings goal.")
+            current_savings = employee_data['Savings for Property (£)'].loc[employee_data['Date'].idxmax()]
+            st.info(f"You currently have £{current_savings} saved.")
+
+            interval = st.selectbox("Select Interval:", ["Daily", "Weekly", "Monthly"])
+            savings_goal = st.number_input("Set Your Savings Target (£):", min_value=0.0, step=100.0)
+
+            if current_savings < savings_goal:
+                shortfall = savings_goal - current_savings
+                st.warning(f"You need to save an additional £{shortfall:.2f} to meet your target.")
+
+                if interval == "Daily":
+                    st.info(f"This means saving approximately £{shortfall / 30:.2f} per day.")
+                elif interval == "Weekly":
+                    st.info(f"This means saving approximately £{shortfall / 4:.2f} per week.")
+                elif interval == "Monthly":
+                    st.info(f"This means saving approximately £{shortfall:.2f} this month.")
+            else:
+                st.success("Congratulations! You have met your savings goal.")
+
     except Exception as e:
-        st.error(f"Decision-making support error: {e}")
+        st.error(f"An unexpected error occurred: {e}")
 
 # Step 5: Real-Time Updates
 elif selected_section == "Real-Time Updates":
-    st.subheader("Step 5: Interactivity and Real-Time Updates")
+    st.subheader("Real-Time Updates")
     try:
         real_time_savings = st.slider("Adjust Current Savings (£):", min_value=0, max_value=int(current_savings + 5000), value=int(current_savings))
         updated_goal_status = "Met" if real_time_savings >= savings_goal else "Not Met"
@@ -211,14 +352,10 @@ elif selected_section == "Real-Time Updates":
 
 # Step 6: Scenario Planning and Forecasting
 elif selected_section == "Scenario Planning":
-    st.subheader("Step 6: Scenario Planning and Forecasting")
+    st.subheader("Scenario Planning and Forecasting")
     try:
         scenario_increase = st.number_input("Increase Savings by (%):", min_value=0, max_value=100, step=5)
         forecasted_savings = real_time_savings * (1 + scenario_increase / 100)
         st.write(f"If you increase savings by {scenario_increase}%, your forecasted savings will be £{forecasted_savings:.2f}.")
     except Exception as e:
         st.error(f"Scenario planning error: {e}")
-
-# Default: Introduction
-else:
-    st.write("Welcome to the Personal Finance Management System. Use the dropdown menu to navigate through the application.")
