@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import seaborn as sns
 import streamlit as st
 import pandas as pd
@@ -35,11 +37,11 @@ selected_employee = st.sidebar.selectbox("Select an Employee:", employees)
 # Define sections/pages
 sections = [
     "Introduction",
+    "Input Rows",
     "Data Visualization",
     "Forecasting",
     "Decision-Making Support",
-    "Real-Time Updates",
-    "Scenario Planning"
+    "Real-Time Updates and Scenario Planning"
 ]
 selected_section = st.selectbox("Navigate to:", sections)
 
@@ -105,6 +107,7 @@ elif selected_section == "Data Visualization":
 
         except Exception as e:
             st.error(f"Pie chart error: {e}")
+
 
     elif selected_viz == "Correlation Matrix (Heatmap)":
         try:
@@ -201,6 +204,52 @@ elif selected_section == "Data Visualization":
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
 
+
+elif selected_section == "Input Rows":
+    st.title("Employee Expenses Management")
+
+    st.write("## Add New Entry")
+
+    # Form to add a new row
+    with st.form(key="add_row_form"):
+        monthly_income = st.number_input("Monthly Income (£)", min_value=0.0, step=0.01)
+        electricity_bill = st.number_input("Electricity Bill (£)", min_value=0.0, step=0.01)
+        gas_bill = st.number_input("Gas Bill (£)", min_value=0.0, step=0.01)
+        netflix = st.number_input("Netflix (£)", min_value=0.0, step=0.01)
+        amazon_prime = st.number_input("Amazon Prime (£)", min_value=0.0, step=0.01)
+        groceries = st.number_input("Groceries (£)", min_value=0.0, step=0.01)
+        transportation = st.number_input("Transportation (£)", min_value=0.0, step=0.01)
+        water_bill = st.number_input("Water Bill (£)", min_value=0.0, step=0.01)
+        sky_sports = st.number_input("Sky Sports (£)", min_value=0.0, step=0.01)
+        other_expenses = st.number_input("Other Expenses (£)", min_value=0.0, step=0.01)
+        savings = st.number_input("Savings for Property (£)", min_value=0.0, step=0.01)
+        monthly_outing = st.number_input("Monthly Outing (£)", min_value=0.0, step=0.01)
+        date = st.date_input("Date", datetime.now())
+
+        submit_button = st.form_submit_button(label="Add Row")
+
+    if submit_button:
+        new_row = {
+                "Employee": selected_employee,
+                "Monthly Income (£)": monthly_income,
+                "Electricity Bill (£)": electricity_bill,
+                "Gas Bill (£)": gas_bill,
+                "Netflix (£)": netflix,
+                "Amazon Prime (£)": amazon_prime,
+                "Groceries (£)": groceries,
+                "Transportation (£)": transportation,
+                "Water Bill (£)": water_bill,
+                "Sky Sports (£)": sky_sports,
+                "Other Expenses (£)": other_expenses,
+                "Savings for Property (£)": savings,
+                "Monthly Outing (£)": monthly_outing,
+                "Date": date.strftime("%Y-%m-%d")
+            }
+
+        # Add the new row to the DataFrame
+        data_cleaned = data_cleaned.append(new_row, ignore_index=True)
+        st.success("New entry added successfully!")
+
 # Step 3: Forecasting
 elif selected_section == "Forecasting":
     st.subheader("Forecasting with Multiple Models")
@@ -285,7 +334,7 @@ elif selected_section == "Decision-Making Support":
         st.error(f"An unexpected error occurred: {e}")
 
 # Step 5: Real-Time Updates
-elif selected_section == "Real-Time Updates":
+elif selected_section == "Real-Time Updates and Scenario Planning":
     st.subheader("Real-Time Updates")
     try:
         st.info(f"You currently have £{current_savings} saved.")
@@ -294,6 +343,7 @@ elif selected_section == "Real-Time Updates":
         current_bills = employee_data['Electricity Bill (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Gas Bill (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Water Bill (£)'].loc[employee_data['Date'].idxmax()]
         current_Income = employee_data['Monthly Income (£)'].loc[employee_data['Date'].idxmax()]
         current_Entertainment = employee_data['Netflix (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Amazon Prime (£)'].loc[employee_data['Date'].idxmax()]+ employee_data['Sky Sports (£)'].loc[employee_data['Date'].idxmax()]+ employee_data['Monthly Outing (£)'].loc[employee_data['Date'].idxmax()]
+        current_other = employee_data['Other Expenses (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Transportation (£)'].loc[employee_data['Date'].idxmax()]
 
         savings_goal = st.number_input("Set Your Savings Target (£):", min_value=0.0, step=100.0)
 
@@ -301,14 +351,18 @@ elif selected_section == "Real-Time Updates":
 
         real_time_bills = st.slider("Adjust Bills (£):", min_value=0, max_value=int(current_bills + 1000), value=int(current_bills))
 
-        real_time_entertainment = st.slider("Adjust Bills (£):", min_value=0, max_value=int(current_Entertainment + 1000), value=int(current_Entertainment))
+        real_time_entertainment = st.slider("Adjust Entertainment (£):", min_value=0, max_value=int(current_Entertainment + 1000), value=int(current_Entertainment))
 
         real_time_savings = st.slider("Adjust Current Savings (£):", min_value=0, max_value=int(current_savings + 5000), value=int(current_savings))
 
-        leftoverMoney = real_time_Income - real_time_bills - real_time_savings
+        real_time_other = st.slider("Adjust Other Expenses and Transportation (£):", min_value=0, max_value=int(current_savings + 5000), value=int(current_other))
 
-        updated_goal_status = "Met" if real_time_savings >= savings_goal else "Not Met"
-        st.write(f"Updated Goal Status: {updated_goal_status}")
+        leftoverMoney = real_time_Income - real_time_bills - real_time_savings - real_time_other - real_time_entertainment
+
+        updated_goal_status = "Met" if real_time_savings >= savings_goal else "not Met"
+        st.info(f"You have {updated_goal_status} your Savings Goal")
+        st.warning(f"You have {leftoverMoney} left over each month")
+
     except Exception as e:
         st.error(f"Real-time updates error: {e}")
 
