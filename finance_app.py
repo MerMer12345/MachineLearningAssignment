@@ -334,9 +334,11 @@ elif selected_section == "Decision-Making Support":
             current_savings = employee_data['Savings for Property (£)'].loc[employee_data['Date'].idxmax()]
             st.info(f"You currently have £{current_savings} saved.")
 
+            # Savings goal and interval input
             interval = st.selectbox("Select Interval:", ["Daily", "Weekly", "Monthly"])
             savings_goal = st.number_input("Set Your Savings Target (£):", min_value=0.0, step=100.0)
 
+            # Check for shortfall and calculate savings required per interval
             if current_savings < savings_goal:
                 shortfall = savings_goal - current_savings
                 st.warning(f"You need to save an additional £{shortfall:.2f} to meet your target.")
@@ -350,8 +352,37 @@ elif selected_section == "Decision-Making Support":
             else:
                 st.success("Congratulations! You have met your savings goal.")
 
+            # Suggest areas for cost-cutting
+            st.subheader("Expense Breakdown and Suggestions")
+
+            # Select the latest available data for the employee
+            latest_data = employee_data.loc[employee_data['Date'].idxmax()]
+
+            # Define thresholds or benchmarks for expenses (these can be adjusted based on domain knowledge or data)
+            thresholds = {
+                'Netflix (£)': 10.0,
+                'Amazon Prime (£)': 8.0,
+                'Monthly Outing (£)': 50.0,
+                'Sky Sports (£)': 20.0,
+                'Groceries (£)': 200.0,
+            }
+
+            suggestions = []
+
+            for column, threshold in thresholds.items():
+                if latest_data[column] > threshold:
+                    suggestions.append(f"Consider reducing your {column[:-4]} expense. Current: £{latest_data[column]:.2f}, Suggested: £{threshold:.2f}.")
+
+            if suggestions:
+                st.warning("Here are some areas where you could save money:")
+                for suggestion in suggestions:
+                    st.write(f"- {suggestion}")
+            else:
+                st.success("Your expenses are within reasonable limits. Great job!")
+
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
+
 
 # Step 5: Real-Time Updates
 elif selected_section == "Real-Time Updates and Scenario Planning":
@@ -386,12 +417,3 @@ elif selected_section == "Real-Time Updates and Scenario Planning":
     except Exception as e:
         st.error(f"Real-time updates error: {e}")
 
-# Step 6: Scenario Planning and Forecasting
-elif selected_section == "Scenario Planning":
-    st.subheader("Scenario Planning and Forecasting")
-    try:
-        scenario_increase = st.number_input("Increase Savings by (%):", min_value=0, max_value=100, step=5)
-        forecasted_savings = real_time_savings * (1 + scenario_increase / 100)
-        st.write(f"If you increase savings by {scenario_increase}%, your forecasted savings will be £{forecasted_savings:.2f}.")
-    except Exception as e:
-        st.error(f"Scenario planning error: {e}")
