@@ -37,7 +37,7 @@ selected_employee = st.sidebar.selectbox("Select an Employee:", employees)
 # Define sections/pages
 sections = [
     "Introduction",
-    "Input Rows",
+    "Input Expenses",
     "Data Visualization",
     "Forecasting",
     "Decision-Making Support",
@@ -111,6 +111,10 @@ elif selected_section == "Data Visualization":
 
     elif selected_viz == "Correlation Matrix (Heatmap)":
         try:
+            # Date Selection
+            dates = data_cleaned[data_cleaned['Employee'] == selected_employee]['Date'].unique()
+            selected_date = st.selectbox("Select a Date:", dates)
+
             df_corrdata = {
                 'Income': data_cleaned['Monthly Income (£)'],
                 'Bills': data_cleaned['Electricity Bill (£)'] + data_cleaned['Gas Bill (£)'] + data_cleaned['Water Bill (£)'],
@@ -123,7 +127,7 @@ elif selected_section == "Data Visualization":
 
             # Calculate correlation matrix
             corrMatrix = df_corrdata.corr()
-
+            st.write(f"Heatmap for {selected_employee}")
             # Display heatmap
             fig, ax = plt.subplots(figsize=(8, 6))
             sns.heatmap(corrMatrix, annot=True, cmap="coolwarm", ax=ax)
