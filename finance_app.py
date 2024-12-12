@@ -76,8 +76,10 @@ elif selected_section == "Data Visualization":
             df_corrdata = {
                 'Employee': data_cleaned['Employee'],
                 'Date': data_cleaned['Date'],
-                'Bills': data_cleaned['Electricity Bill (£)'] + data_cleaned['Gas Bill (£)'] + data_cleaned['Water Bill (£)'],
-                'Entertainment': data_cleaned['Amazon Prime (£)'] + data_cleaned['Netflix (£)'] + data_cleaned['Sky Sports (£)'],
+                'Bills': data_cleaned['Electricity Bill (£)'] + data_cleaned['Gas Bill (£)'] + data_cleaned[
+                    'Water Bill (£)'],
+                'Entertainment': data_cleaned['Amazon Prime (£)'] + data_cleaned['Netflix (£)'] + data_cleaned[
+                    'Sky Sports (£)'],
                 'Transport': data_cleaned['Transportation (£)'],
                 'Savings': data_cleaned['Savings for Property (£)']
             }
@@ -91,12 +93,12 @@ elif selected_section == "Data Visualization":
 
             # Check if the subframe has data
             if not subframe.empty:
-                # Prepare data for the pie chart
+                # Prepare data for the pie chart (individual breakdown)
                 expenses = subframe.iloc[0]  # Select the first (and only) row of the subframe
                 labels = expenses.index
                 sizes = expenses.values
 
-                # Create the pie chart
+                # Create the pie chart for individual breakdown
                 fig = go.Figure(
                     data=[go.Pie(labels=labels, values=sizes, hole=0.3)],
                     layout_title_text=f"Expenses Breakdown for {selected_employee} on {selected_date}"
@@ -104,6 +106,20 @@ elif selected_section == "Data Visualization":
                 st.plotly_chart(fig)
             else:
                 st.warning("No data available for the selected employee and date.")
+
+            # Calculate mean expenses for all employees
+            mean_expenses = df_corrdata.drop(columns=['Employee', 'Date']).mean()
+
+            # Prepare data for the mean pie chart
+            mean_labels = mean_expenses.index
+            mean_sizes = mean_expenses.values
+
+            # Create the pie chart for mean expenses
+            mean_fig = go.Figure(
+                data=[go.Pie(labels=mean_labels, values=mean_sizes, hole=0.3)],
+                layout_title_text="Mean Expenses Breakdown for All Employees"
+            )
+            st.plotly_chart(mean_fig)
 
         except Exception as e:
             st.error(f"Pie chart error: {e}")
@@ -209,7 +225,7 @@ elif selected_section == "Data Visualization":
             st.error(f"An unexpected error occurred: {e}")
 
 
-elif selected_section == "Input Rows":
+elif selected_section == "Input Expenses":
     st.title("Employee Expenses Management")
 
     st.write("## Add New Entry")
