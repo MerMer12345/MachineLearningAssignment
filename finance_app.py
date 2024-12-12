@@ -155,102 +155,112 @@ elif selected_section == "Data Visualization":
 
     elif selected_viz == "KMeans Clustering Analysis":
         try:
-            # Prepare data for clustering
-            df_kmeans_data = pd.DataFrame({
-                'Income': data_cleaned['Monthly Income (£)'],
-                'Spendings': (
-                    data_cleaned['Electricity Bill (£)'] +
-                    data_cleaned['Gas Bill (£)'] +
-                    data_cleaned['Netflix (£)'] +
-                    data_cleaned['Amazon Prime (£)'] +
-                    data_cleaned['Groceries (£)'] +
-                    data_cleaned['Transportation (£)'] +
-                    data_cleaned['Water Bill (£)'] +
-                    data_cleaned['Sky Sports (£)'] +
-                    data_cleaned['Other Expenses (£)'] +
-                    data_cleaned['Savings for Property (£)'] +
-                    data_cleaned['Monthly Outing (£)']
+            #Select date
+            dates = data_cleaned['Date'].unique()
+            selected_date = st.selectbox("Select a Date:", dates)
+            subframe = data_cleaned[data_cleaned['Date'] == selected_date]
+
+            if not subframe.empty:
+                # Prepare data for clustering
+                df_kmeans_data = pd.DataFrame({
+                    'Income': subframe['Monthly Income (£)'],
+                    'Spendings': (
+                        subframe['Electricity Bill (£)'] +
+                        subframe['Gas Bill (£)'] +
+                        subframe['Netflix (£)'] +
+                        subframe['Amazon Prime (£)'] +
+                        subframe['Groceries (£)'] +
+                        subframe['Transportation (£)'] +
+                        subframe['Water Bill (£)'] +
+                        subframe['Sky Sports (£)'] +
+                        subframe['Other Expenses (£)'] +
+                        subframe['Savings for Property (£)'] +
+                        subframe['Monthly Outing (£)']
+                    )
+                })
+
+                # Normalize and scale the data
+                scaler = StandardScaler()
+                scaled_data = scaler.fit_transform(df_kmeans_data)
+
+                # Elbow Method for optimal number of clusters
+                def calculate_elbow(data, max_clusters=10):
+                    inertia_values = []
+                    for i in range(1, max_clusters + 1):
+                        kmeans = KMeans(n_clusters=i, init='k-means++', random_state=11)
+                        kmeans.fit(data)
+                        inertia_values.append(kmeans.inertia_)
+                    return inertia_values
+
+                sum_squares_in_clusters = calculate_elbow(scaled_data)
+
+                # Plot Elbow Curve with Plotly
+                optimal_clusters = 3  # This can be dynamically determined based on criteria if desired
+                elbow_fig = go.Figure()
+                elbow_fig.add_trace(go.Scatter(
+                    x=list(range(1, 11)),
+                    y=sum_squares_in_clusters,
+                    mode='lines+markers',
+                    name='Inertia'
+                ))
+                elbow_fig.add_vline(x=optimal_clusters, line_width=2, line_dash="dash", line_color="green")
+                elbow_fig.update_layout(
+                    title="Elbow Method for Optimal Clusters",
+                    xaxis_title="Number of Clusters",
+                    yaxis_title="Inertia",
+                    template="plotly_white"
                 )
-            })
+                st.plotly_chart(elbow_fig)
 
-            # Normalize and scale the data
-            scaler = StandardScaler()
-            scaled_data = scaler.fit_transform(df_kmeans_data)
+                # Apply KMeans with the optimal number of clusters
+                kmeans = KMeans(n_clusters=optimal_clusters, init='k-means++', random_state=11)
+                y_kmeans = kmeans.fit_predict(scaled_data)
 
-            # Elbow Method for optimal number of clusters
-            def calculate_elbow(data, max_clusters=10):
-                inertia_values = []
-                for i in range(1, max_clusters + 1):
-                    kmeans = KMeans(n_clusters=i, init='k-means++', random_state=11)
-                    kmeans.fit(data)
-                    inertia_values.append(kmeans.inertia_)
-                return inertia_values
+                # Prepare data for visualization
+                df_kmeans_data['Cluster'] = y_kmeans
+                df_kmeans_data['Cluster'] = df_kmeans_data['Cluster'].astype(str)  # For discrete coloring
 
-            sum_squares_in_clusters = calculate_elbow(scaled_data)
+                # Add cluster centers to the DataFrame
+                centers = scaler.inverse_transform(kmeans.cluster_centers_)
+                cluster_centers_df = pd.DataFrame(centers, columns=['Income', 'Spendings'])
+                cluster_centers_df['Cluster'] = [f'Centroid {i+1}' for i in range(len(centers))]
 
-            # Plot Elbow Curve with Plotly
-            optimal_clusters = 3  # This can be dynamically determined based on criteria if desired
-            elbow_fig = go.Figure()
-            elbow_fig.add_trace(go.Scatter(
-                x=list(range(1, 11)),
-                y=sum_squares_in_clusters,
-                mode='lines+markers',
-                name='Inertia'
-            ))
-            elbow_fig.add_vline(x=optimal_clusters, line_width=2, line_dash="dash", line_color="green")
-            elbow_fig.update_layout(
-                title="Elbow Method for Optimal Clusters",
-                xaxis_title="Number of Clusters",
-                yaxis_title="Inertia",
-                template="plotly_white"
-            )
-            st.plotly_chart(elbow_fig)
+                # Interactive Scatter Plot with Plotly
+                scatter_fig = go.Figure()
+                for cluster, color in zip(df_kmeans_data['Cluster'].unique(), px.colors.qualitative.Plotly):
+                    cluster_data = df_kmeans_data[df_kmeans_data['Cluster'] == cluster]
+                    scatter_fig.add_trace(go.Scatter(
+                        x=cluster_data['Income'],
+                        y=cluster_data['Spendings'],
+                        mode='markers',
+                        marker=dict(color=color),
+                        name=f'Cluster {cluster}',
+                        hovertemplate='<b>Income:</b> %{x}<br>' +
+                                      '<b>Spendings:</b> %{y}<extra></extra>'
+                    ))
 
-            # Apply KMeans with the optimal number of clusters
-            kmeans = KMeans(n_clusters=optimal_clusters, init='k-means++', random_state=11)
-            y_kmeans = kmeans.fit_predict(scaled_data)
+                # Add centroids to the scatter plot
+                for i, row in cluster_centers_df.iterrows():
+                    scatter_fig.add_trace(go.Scatter(
+                        x=[row['Income']],
+                        y=[row['Spendings']],
+                        mode='markers+text',
+                        marker=dict(size=12, color='grey', symbol='x'),
+                        name=row['Cluster'],
+                        text=[row['Cluster']],
+                        textposition='top center'
+                    ))
 
-            # Prepare data for visualization
-            df_kmeans_data['Cluster'] = y_kmeans
-            df_kmeans_data['Cluster'] = df_kmeans_data['Cluster'].astype(str)  # For discrete coloring
+                scatter_fig.update_layout(
+                    title='KMeans Clustering Results',
+                    xaxis_title='Income',
+                    yaxis_title='Spendings',
+                    template='plotly_white'
+                )
 
-            # Add cluster centers to the DataFrame
-            centers = scaler.inverse_transform(kmeans.cluster_centers_)
-            cluster_centers_df = pd.DataFrame(centers, columns=['Income', 'Spendings'])
-            cluster_centers_df['Cluster'] = [f'Centroid {i+1}' for i in range(len(centers))]
-
-            # Interactive Scatter Plot with Plotly
-            scatter_fig = go.Figure()
-            for cluster, color in zip(df_kmeans_data['Cluster'].unique(), px.colors.qualitative.Plotly):
-                cluster_data = df_kmeans_data[df_kmeans_data['Cluster'] == cluster]
-                scatter_fig.add_trace(go.Scatter(
-                    x=cluster_data['Income'],
-                    y=cluster_data['Spendings'],
-                    mode='markers',
-                    marker=dict(color=color),
-                    name=f'Cluster {cluster}'
-                ))
-
-            # Add centroids to the scatter plot
-            for i, row in cluster_centers_df.iterrows():
-                scatter_fig.add_trace(go.Scatter(
-                    x=[row['Income']],
-                    y=[row['Spendings']],
-                    mode='markers+text',
-                    marker=dict(size=12, color='grey', symbol='x'),
-                    name=row['Cluster'],
-                    text=[row['Cluster']],
-                    textposition='top center'
-                ))
-
-            scatter_fig.update_layout(
-                title='KMeans Clustering Results',
-                xaxis_title='Income',
-                yaxis_title='Spendings',
-                template='plotly_white'
-            )
-
-            st.plotly_chart(scatter_fig)
+                st.plotly_chart(scatter_fig)
+            else:
+                st.warning("No data available for the selected date.")
 
         except KeyError as ke:
             st.error(f"Missing data columns for clustering: {ke}")
