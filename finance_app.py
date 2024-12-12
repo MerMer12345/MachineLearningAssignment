@@ -319,53 +319,71 @@ elif selected_section == "Input Expenses":
         data_cleaned = data_cleaned.append(new_row, ignore_index=True)
         st.success("New entry added successfully!")
 
-# Step 3: Forecasting
+# Forecasting
 elif selected_section == "Forecasting":
-    st.subheader("Forecasting with Multiple Models")
+    st.title("Forecasting with Multiple Models")
+
 
     try:
+        # Data preparation
+        columns_to_forecast = ['Savings for Property (£)', 'Electricity Bill (£)',
+                               'Gas Bill (£)','Water Bill (£)', 'Groceries (£)', 'Transportation (£)', 'Other Expenses (£)']
+
         # Filter data for the selected employee
-        employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee][['Date', 'Monthly Income (£)']]
-        employee_data['Date'] = pd.to_datetime(employee_data['Date'])
-        employee_data.rename(columns={"Date": "ds", "Monthly Income (£)": "y"}, inplace=True)
+        employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee]
 
         # Model selection
         models = ["Facebook Prophet", "ARIMA", "SARIMAX"]
         selected_model = st.selectbox("Select a forecasting model", models)
 
-        if selected_model == "Facebook Prophet":
-            model = Prophet()
-            model.fit(employee_data)
+        forecasts = {}
 
-            future = model.make_future_dataframe(periods=1, freq='Y')  # Forecasting for the next year
-            forecast = model.predict(future)
+        for col in columns_to_forecast:
+            target_data = employee_data[['Date', col]].rename(columns={"Date": "ds", col: "y"})
+            target_data['ds'] = pd.to_datetime(target_data['ds'])
 
-            st.write(f"### Monthly Income Forecast for {selected_employee} using Prophet")
-            fig = model.plot(forecast)
-            st.pyplot(fig)
+            if selected_model == "Facebook Prophet":
+                model = Prophet()
+                model.fit(target_data)
 
-        elif selected_model == "ARIMA":
-            employee_data.set_index('ds', inplace=True)
+                future = model.make_future_dataframe(periods=24, freq='M')  # Forecast for the next year
+                forecast = model.predict(future)
+                forecasts[col] = forecast[['ds', 'yhat']].rename(columns={"yhat": col})
 
-            model = ARIMA(employee_data['y'], order=(1, 1, 1))
-            model_fit = model.fit()
+            elif selected_model == "ARIMA":
+                target_data.set_index('ds', inplace=True)
+                model = ARIMA(target_data['y'], order=(1, 1, 1))
+                model_fit = model.fit()
+                forecast = model_fit.forecast(steps=12)
+                forecast_df = pd.DataFrame({'ds': pd.date_range(start=target_data.index[-1], periods=12, freq='M'),
+                                            col: forecast})
+                forecasts[col] = forecast_df
 
-            forecast = model_fit.forecast(steps=12)
-            st.write(f"### Monthly Income Forecast for {selected_employee} using ARIMA")
-            st.line_chart(forecast)
+            elif selected_model == "SARIMAX":
+                target_data.set_index('ds', inplace=True)
+                model = SARIMAX(target_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+                model_fit = model.fit()
+                forecast = model_fit.get_forecast(steps=12)
+                forecast_df = forecast.conf_int()
+                forecast_df["Forecast"] = forecast.predicted_mean
+                forecast_df = forecast_df[['Forecast']].rename(columns={"Forecast": col})
+                forecast_df['ds'] = pd.date_range(start=target_data.index[-1], periods=12, freq='M')
+                forecasts[col] = forecast_df
 
-        elif selected_model == "SARIMAX":
-            employee_data.set_index('ds', inplace=True)
+        # Combine all forecasts
+        combined_forecasts = pd.concat(forecasts.values(), axis=1)
+        combined_forecasts = combined_forecasts.loc[:,
+                             ~combined_forecasts.columns.duplicated()]  # Remove duplicate 'ds'
 
-            model = SARIMAX(employee_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
-            model_fit = model.fit()
+        # Prepare data for Plotly
+        melted_forecasts = combined_forecasts.melt(id_vars='ds', var_name='Category', value_name='Value')
 
-            forecast = model_fit.get_forecast(steps=12)
-            forecast_df = forecast.conf_int()
-            forecast_df["Forecast"] = forecast.predicted_mean
-
-            st.write(f"### Monthly Income Forecast for {selected_employee} using SARIMAX")
-            st.line_chart(forecast_df["Forecast"])
+        # Plotting with Plotly
+        st.write(f"### Forecasts for {selected_employee}")
+        fig = px.line(melted_forecasts, x='ds', y='Value', color='Category', title="Forecasting Results",
+                      labels={'ds': 'Date', 'Value': 'Forecasted Value', 'Category': 'Expense Type'},
+                      hover_name='Category')
+        st.plotly_chart(fig)
 
     except Exception as e:
         st.error(f"Forecasting error: {e}")
