@@ -80,8 +80,9 @@ elif selected_section == "Data Visualization":
                     'Water Bill (£)'],
                 'Entertainment': data_cleaned['Amazon Prime (£)'] + data_cleaned['Netflix (£)'] + data_cleaned[
                     'Sky Sports (£)'],
-                'Transport': data_cleaned['Transportation (£)'],
-                'Savings': data_cleaned['Savings for Property (£)']
+                'Necessities': data_cleaned['Transportation (£)']+ data_cleaned['Groceries (£)'],
+                'Savings': data_cleaned['Savings for Property (£)'],
+                'Other Expenses' : data_cleaned['Other Expenses (£)']
             }
             df_corrdata = pd.DataFrame(df_corrdata)
 
@@ -323,14 +324,25 @@ elif selected_section == "Input Expenses":
 elif selected_section == "Forecasting":
     st.title("Forecasting with Multiple Models")
 
-
     try:
-        # Data preparation
-        columns_to_forecast = ['Savings for Property (£)', 'Electricity Bill (£)',
-                               'Gas Bill (£)','Water Bill (£)', 'Groceries (£)', 'Transportation (£)', 'Other Expenses (£)']
+
+        # Grouping columns into categories
+        category_mapping = {
+            "Bills": ['Electricity Bill (£)', 'Gas Bill (£)', 'Water Bill (£)'],
+            "Entertainment": ['Netflix (£)', 'Amazon Prime (£)', 'Sky Sports (£)', 'Monthly Outing (£)'],
+            "Necessities": ['Groceries (£)', 'Transportation (£)'],
+            "Savings" : ['Savings for Property (£)'],
+            "Other Expenses" : ['Other Expenses (£)']
+        }
 
         # Filter data for the selected employee
         employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee]
+
+        # Create aggregated data for each category
+        grouped_data = pd.DataFrame()
+        grouped_data['Date'] = employee_data['Date']
+        for category, columns in category_mapping.items():
+            grouped_data[category] = employee_data[columns].sum(axis=1)
 
         # Model selection
         models = ["Facebook Prophet", "ARIMA", "SARIMAX"]
@@ -338,8 +350,8 @@ elif selected_section == "Forecasting":
 
         forecasts = {}
 
-        for col in columns_to_forecast:
-            target_data = employee_data[['Date', col]].rename(columns={"Date": "ds", col: "y"})
+        for category in category_mapping.keys():
+            target_data = grouped_data[['Date', category]].rename(columns={"Date": "ds", category: "y"})
             target_data['ds'] = pd.to_datetime(target_data['ds'])
 
             if selected_model == "Facebook Prophet":
@@ -348,7 +360,7 @@ elif selected_section == "Forecasting":
 
                 future = model.make_future_dataframe(periods=24, freq='M')  # Forecast for the next year
                 forecast = model.predict(future)
-                forecasts[col] = forecast[['ds', 'yhat']].rename(columns={"yhat": col})
+                forecasts[category] = forecast[['ds', 'yhat']].rename(columns={"yhat": category})
 
             elif selected_model == "ARIMA":
                 target_data.set_index('ds', inplace=True)
@@ -356,8 +368,8 @@ elif selected_section == "Forecasting":
                 model_fit = model.fit()
                 forecast = model_fit.forecast(steps=12)
                 forecast_df = pd.DataFrame({'ds': pd.date_range(start=target_data.index[-1], periods=12, freq='M'),
-                                            col: forecast})
-                forecasts[col] = forecast_df
+                                            category: forecast})
+                forecasts[category] = forecast_df
 
             elif selected_model == "SARIMAX":
                 target_data.set_index('ds', inplace=True)
@@ -366,9 +378,9 @@ elif selected_section == "Forecasting":
                 forecast = model_fit.get_forecast(steps=12)
                 forecast_df = forecast.conf_int()
                 forecast_df["Forecast"] = forecast.predicted_mean
-                forecast_df = forecast_df[['Forecast']].rename(columns={"Forecast": col})
+                forecast_df = forecast_df[['Forecast']].rename(columns={"Forecast": category})
                 forecast_df['ds'] = pd.date_range(start=target_data.index[-1], periods=12, freq='M')
-                forecasts[col] = forecast_df
+                forecasts[category] = forecast_df
 
         # Combine all forecasts
         combined_forecasts = pd.concat(forecasts.values(), axis=1)
@@ -384,6 +396,13 @@ elif selected_section == "Forecasting":
                       labels={'ds': 'Date', 'Value': 'Forecasted Value', 'Category': 'Expense Type'},
                       hover_name='Category')
         st.plotly_chart(fig)
+        # Display category explanation
+        st.write("### Category Groupings")
+        st.write("- **Bills**: Electricity Bill, Gas Bill, Water Bill")
+        st.write("- **Entertainment**: Netflix, Amazon Prime, Sky Sports, Monthly Outing")
+        st.write("- **Necessities**: Groceries, Transportation")
+        st.write("- **Savings**: Savings for Property")
+        st.write("- **Other Expenses**: Other Expenses")
 
     except Exception as e:
         st.error(f"Forecasting error: {e}")
