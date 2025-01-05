@@ -418,67 +418,69 @@ elif selected_section == "Forecasting":
                 st.write(f"Mean Absolute Error (MAE): {mae}")
                 st.write(f"Root Mean Squared Error (RMSE): {rmse}")
                 st.write(f"Mean Absolute Error (MAPE): {mape}")
-                # Add accuracy metrics to the DataFrame (repeated in all rows for simplicity)
-                forecast_df['MAE'] = mae
-                forecast_df['RMSE'] = rmse
-                forecast_df['MAPE'] = mape
+
                 # Store the forecasts in a dictionary
                 forecasts[category] = forecast_df
 
             elif selected_model == "SARIMAX":
 
-                # Split data into training and testing sets
-                split_index = int(len(target_data) * 0.8)  # 80% training, 20% testing
-                train_data = target_data.iloc[:split_index]
-                test_data = target_data.iloc[split_index:]
+                #Ensure 'ds' is the index
 
-                # Ensure 'ds' is the index for both training and testing sets
-                train_data.set_index('ds', inplace=True)
-                test_data.set_index('ds', inplace=True)
+                target_data.set_index('ds', inplace=True)
 
-                # Fit the SARIMAX model using training data
-                model = SARIMAX(train_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+                # Fit the SARIMAX model using the entire dataset
+
+                model = SARIMAX(target_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+
                 model_fit = model.fit()
 
-                # Forecast for the length of the test data
-                forecast = model_fit.get_forecast(steps=len(test_data))
+                # Forecast for the next 12 steps (to match ARIMA)
 
-                # Create the forecast DataFrame
-                forecast_df = forecast.conf_int()  # Get confidence intervals
-                forecast_df["Forecast"] = forecast.predicted_mean  # Add the predicted mean as the forecast
+                forecast = model_fit.get_forecast(steps=12)
 
-                # Align forecast dates with the test data
-                forecast_df['ds'] = test_data.index  # Match test set dates
-                forecast_df.reset_index(drop=True, inplace=True)  # Reset index to avoid conflicts
+                forecast_mean = forecast.predicted_mean
 
+                # Create a consistent forecast DataFrame
 
-                # Set 'ds' as the index again after resetting
-                forecast_df.set_index('ds', inplace=True)  # Set 'ds' as the index
+                forecast_df = pd.DataFrame({
 
-                # Ensure the column is created successfully
-                if "Forecast" not in forecast_df.columns:
-                    raise ValueError("Forecast column was not created. Check the model's output.")
+                    'ds': pd.date_range(start=target_data.index[-1] + pd.DateOffset(1), periods=12, freq='M'),
+
+                    category: forecast_mean.values
+
+                })
 
                 # Calculate accuracy metrics
-                actual_values = test_data['y']
-                predicted_values = forecast_df['Forecast']
 
-                # Debugging: Check for NaN or missing values
-                if predicted_values.isnull().any():
-                    raise ValueError("Predicted values contain NaN. Check the model or data preprocessing.")
+                # Get in-sample predictions
 
-                # Calculate metrics
-                mae = mean_absolute_error(actual_values, predicted_values)
-                mse = mean_squared_error(actual_values, predicted_values)
-                mape = np.mean(np.abs((actual_values - predicted_values) / actual_values)) * 100
+                in_sample_predictions = model_fit.predict(start=1, end=len(target_data) - 1)
+
+                # Debugging: Check for NaN or missing values in predictions
+
+                if in_sample_predictions.isnull().any():
+                    raise ValueError("In-sample predictions contain NaN. Check the model or data preprocessing.")
+
+                # Calculate MAE, RMSE, and MAPE
+
+                mae = mean_absolute_error(target_data['y'][1:], in_sample_predictions)
+
+                rmse = np.sqrt(mean_squared_error(target_data['y'][1:], in_sample_predictions))
+
+                mape = np.mean(np.abs((target_data['y'][1:] - in_sample_predictions) / target_data['y'][1:])) * 100
 
                 # Display accuracy metrics
-                st.write(f"### Accuracy Metrics for {category}:")
+
+                st.write(f"### Model Accuracy for {category}:")
+
                 st.write(f"Mean Absolute Error (MAE): {mae}")
-                st.write(f"Mean Squared Error (MSE): {mse}")
+
+                st.write(f"Root Mean Squared Error (RMSE): {rmse}")
+
                 st.write(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
 
-                # Add forecasts to the dictionary
+                # Store the forecasts in a dictionary
+
                 forecasts[category] = forecast_df
 
         # Combine all forecasts
