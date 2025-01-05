@@ -17,6 +17,10 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import numpy as np
+import pandas as pd
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import numpy as np
 
 # Main title
 st.title("Finance Management System with Forecasting and Interactive Features")
@@ -361,9 +365,6 @@ elif selected_section == "Forecasting":
             target_data['ds'] = pd.to_datetime(target_data['ds'])
 
             if selected_model == "Facebook Prophet":
-
-
-                if selected_model == "Facebook Prophet":
                     # Split the data into training and testing sets
                     split_index = int(len(target_data) * 0.8)  # Use 80% of data for training
                     train_data = target_data.iloc[:split_index]
@@ -396,51 +397,35 @@ elif selected_section == "Forecasting":
                     forecasts[category] = forecast[['ds', 'yhat']].rename(columns={"yhat": category})
 
             elif selected_model == "ARIMA":
-
-                # Assuming 'target_data' is prepared with 'ds' as datetime and 'y' as the target variable
                 target_data.set_index('ds', inplace=True)
-
                 # Fit the ARIMA model
                 model = ARIMA(target_data['y'], order=(1, 1, 1))
                 model_fit = model.fit()
-
                 # Forecast for the next 12 steps
                 forecast = model_fit.forecast(steps=12)
                 forecast_df = pd.DataFrame({
                     'ds': pd.date_range(start=target_data.index[-1] + pd.DateOffset(1), periods=12, freq='M'),
                     category: forecast
                 })
-
                 # Calculate accuracy metrics
                 # Get the in-sample predictions
                 in_sample_predictions = model_fit.predict(start=1, end=len(target_data) - 1)
-
                 # Calculate MAE, RMSE, and MAPE
                 mae = mean_absolute_error(target_data['y'][1:], in_sample_predictions)
                 rmse = np.sqrt(mean_squared_error(target_data['y'][1:], in_sample_predictions))
                 mape = np.mean(np.abs((target_data['y'][1:] - in_sample_predictions) / target_data['y'][1:])) * 100
-
                 st.write(f"### Model Accuracy for {category}:")
                 st.write(f"Mean Absolute Error (MAE): {mae}")
                 st.write(f"Root Mean Squared Error (RMSE): {rmse}")
                 st.write(f"Mean Absolute Error (MAPE): {mape}")
-
                 # Add accuracy metrics to the DataFrame (repeated in all rows for simplicity)
                 forecast_df['MAE'] = mae
                 forecast_df['RMSE'] = rmse
                 forecast_df['MAPE'] = mape
-
                 # Store the forecasts in a dictionary
                 forecasts[category] = forecast_df
 
             elif selected_model == "SARIMAX":
-
-                import pandas as pd
-                from statsmodels.tsa.statespace.sarimax import SARIMAX
-                from sklearn.metrics import mean_absolute_error, mean_squared_error
-                import numpy as np
-
-                # Assuming target_data is already defined and contains 'ds' and 'y' columns
 
                 # Split data into training and testing sets
                 split_index = int(len(target_data) * 0.8)  # 80% training, 20% testing
@@ -466,10 +451,6 @@ elif selected_section == "Forecasting":
                 forecast_df['ds'] = test_data.index  # Match test set dates
                 forecast_df.reset_index(drop=True, inplace=True)  # Reset index to avoid conflicts
 
-                # Check the structure of forecast_df before setting the index
-                print("Forecast DataFrame before setting index:")
-                print(forecast_df.head())
-                print(forecast_df.columns)
 
                 # Set 'ds' as the index again after resetting
                 forecast_df.set_index('ds', inplace=True)  # Set 'ds' as the index
@@ -510,13 +491,11 @@ elif selected_section == "Forecasting":
         # Debugging: Check if 'ds' exists in combined_forecasts
         if 'ds' not in combined_forecasts.columns:
             raise ValueError("'ds' column is missing in combined_forecasts. Check data processing steps.")
-
         # Remove duplicate columns
         combined_forecasts = combined_forecasts.loc[:, ~combined_forecasts.columns.duplicated()]
 
         # Prepare data for Plotly
         melted_forecasts = combined_forecasts.melt(id_vars='ds', var_name='Category', value_name='Value')
-
         # Plotting with Plotly
         st.write(f"### Forecasts for {selected_employee}")
         fig = px.line(melted_forecasts, x='ds', y='Value', color='Category', title="Forecasting Results",
@@ -530,7 +509,6 @@ elif selected_section == "Forecasting":
         st.write("- **Necessities**: Groceries, Transportation")
         st.write("- **Savings**: Savings for Property")
         st.write("- **Other Expenses**: Other Expenses")
-
     except Exception as e:
         st.error(f"Forecasting error: {e}")
 
