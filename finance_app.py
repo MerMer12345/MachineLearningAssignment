@@ -310,27 +310,47 @@ elif selected_section == "Input Expenses":
         submit_button = st.form_submit_button(label="Add Row")
 
     if submit_button:
-        new_row = {
-                "Employee": selected_employee,
+        try:
+            # Validate inputs
+            required_fields = {
                 "Monthly Income (£)": monthly_income,
                 "Electricity Bill (£)": electricity_bill,
                 "Gas Bill (£)": gas_bill,
-                "Netflix (£)": netflix,
-                "Amazon Prime (£)": amazon_prime,
                 "Groceries (£)": groceries,
-                "Transportation (£)": transportation,
                 "Water Bill (£)": water_bill,
-                "Sky Sports (£)": sky_sports,
-                "Other Expenses (£)": other_expenses,
-                "Savings for Property (£)": savings,
-                "Monthly Outing (£)": monthly_outing,
-                "Date": date.strftime("%Y-%m-%d")
+                "Date": date
             }
 
-        # Add the new row to the DataFrame
-        data_cleaned = data_cleaned.append(new_row, ignore_index=True)
-        st.success("New entry added successfully!")
+            missing_fields = [field for field, value in required_fields.items() if value in (None, 0.0, "")]
+            if missing_fields:
+                st.error(f"The following fields cannot be empty or zero: {', '.join(missing_fields)}")
+            else:
+                # Create the new row
+                new_row = {
+                    "Employee": selected_employee,
+                    "Monthly Income (£)": monthly_income,
+                    "Electricity Bill (£)": electricity_bill,
+                    "Gas Bill (£)": gas_bill,
+                    "Netflix (£)": netflix,
+                    "Amazon Prime (£)": amazon_prime,
+                    "Groceries (£)": groceries,
+                    "Transportation (£)": transportation,
+                    "Water Bill (£)": water_bill,
+                    "Sky Sports (£)": sky_sports,
+                    "Other Expenses (£)": other_expenses,
+                    "Savings for Property (£)": savings,
+                    "Monthly Outing (£)": monthly_outing,
+                    "Date": date.strftime("%Y-%m-%d")
+                }
 
+                # Convert the dictionary to a DataFrame
+                new_row_df = pd.DataFrame([new_row])  # Wrap the dictionary in a list to make it a single-row DataFrame
+
+                # Add the new row to the DataFrame
+                data_cleaned = pd.concat([data_cleaned, new_row_df], ignore_index=True)
+                st.success("New entry added successfully!")
+        except Exception as e:
+            st.error(f"Error Inserting Data!: {e}")
 # Forecasting
 elif selected_section == "Forecasting":
     st.title("Forecasting with Multiple Models")
@@ -425,62 +445,39 @@ elif selected_section == "Forecasting":
             elif selected_model == "SARIMAX":
 
                 #Ensure 'ds' is the index
-
                 target_data.set_index('ds', inplace=True)
 
                 # Fit the SARIMAX model using the entire dataset
-
                 model = SARIMAX(target_data['y'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
-
                 model_fit = model.fit()
 
                 # Forecast for the next 12 steps (to match ARIMA)
-
                 forecast = model_fit.get_forecast(steps=12)
 
                 forecast_mean = forecast.predicted_mean
-
                 # Create a consistent forecast DataFrame
-
                 forecast_df = pd.DataFrame({
-
                     'ds': pd.date_range(start=target_data.index[-1] + pd.DateOffset(1), periods=12, freq='M'),
-
                     category: forecast_mean.values
-
                 })
 
-                # Calculate accuracy metrics
-
                 # Get in-sample predictions
-
                 in_sample_predictions = model_fit.predict(start=1, end=len(target_data) - 1)
 
                 # Debugging: Check for NaN or missing values in predictions
-
                 if in_sample_predictions.isnull().any():
                     raise ValueError("In-sample predictions contain NaN. Check the model or data preprocessing.")
 
                 # Calculate MAE, RMSE, and MAPE
-
                 mae = mean_absolute_error(target_data['y'][1:], in_sample_predictions)
-
                 rmse = np.sqrt(mean_squared_error(target_data['y'][1:], in_sample_predictions))
-
                 mape = np.mean(np.abs((target_data['y'][1:] - in_sample_predictions) / target_data['y'][1:])) * 100
-
                 # Display accuracy metrics
-
                 st.write(f"### Model Accuracy for {category}:")
-
                 st.write(f"Mean Absolute Error (MAE): {mae}")
-
                 st.write(f"Root Mean Squared Error (RMSE): {rmse}")
-
                 st.write(f"Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
-
                 # Store the forecasts in a dictionary
-
                 forecasts[category] = forecast_df
 
         # Combine all forecasts
@@ -517,7 +514,6 @@ elif selected_section == "Forecasting":
 # Step 4: Decision-Making Support
 elif selected_section == "Decision-Making Support":
     st.subheader("Decision-Making Support")
-
     try:
         employee_data = data_cleaned[data_cleaned['Employee'] == selected_employee]
 
@@ -546,7 +542,7 @@ elif selected_section == "Decision-Making Support":
                 st.success("Congratulations! You have met your savings goal.")
 
             # Suggest areas for cost-cutting
-            st.subheader("Expense Breakdown and Suggestions")
+            st.subheader("Suggestions")
 
             # Select the latest available data for the employee
             latest_data = employee_data.loc[employee_data['Date'].idxmax()]
@@ -579,30 +575,32 @@ elif selected_section == "Decision-Making Support":
 
 # Step 5: Real-Time Updates
 elif selected_section == "Real-Time Updates and Scenario Planning":
-    st.subheader("Real-Time Updates")
+    st.subheader("Real-Time Updates and Planning")
     try:
         st.info(f"You currently have £{current_savings} saved.")
-
         current_savings = employee_data['Savings for Property (£)'].loc[employee_data['Date'].idxmax()]
-        current_bills = employee_data['Electricity Bill (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Gas Bill (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Water Bill (£)'].loc[employee_data['Date'].idxmax()]
+        current_bills = (employee_data['Electricity Bill (£)'].loc[employee_data['Date'].idxmax()]
+                         + employee_data['Gas Bill (£)'].loc[employee_data['Date'].idxmax()]
+                         + employee_data['Water Bill (£)'].loc[employee_data['Date'].idxmax()])
         current_Income = employee_data['Monthly Income (£)'].loc[employee_data['Date'].idxmax()]
-        current_Entertainment = employee_data['Netflix (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Amazon Prime (£)'].loc[employee_data['Date'].idxmax()]+ employee_data['Sky Sports (£)'].loc[employee_data['Date'].idxmax()]+ employee_data['Monthly Outing (£)'].loc[employee_data['Date'].idxmax()]
-        current_other = employee_data['Other Expenses (£)'].loc[employee_data['Date'].idxmax()] + employee_data['Transportation (£)'].loc[employee_data['Date'].idxmax()]
-
+        current_Entertainment = (employee_data['Netflix (£)'].loc[employee_data['Date'].idxmax()]
+                                 + employee_data['Amazon Prime (£)'].loc[employee_data['Date'].idxmax()]
+                                 + employee_data['Sky Sports (£)'].loc[employee_data['Date'].idxmax()]
+                                 + employee_data['Monthly Outing (£)'].loc[employee_data['Date'].idxmax()])
+        current_other = (employee_data['Other Expenses (£)'].loc[employee_data['Date'].idxmax()]
+                         + employee_data['Transportation (£)'].loc[employee_data['Date'].idxmax()])
         savings_goal = st.number_input("Set Your Savings Target (£):", min_value=0.0, step=100.0)
-
-        real_time_Income = st.slider("Adjust Monthly Income (£):", min_value=0, max_value=int(current_Income + 5000), value=int(current_Income))
-
-        real_time_bills = st.slider("Adjust Bills (£):", min_value=0, max_value=int(current_bills + 1000), value=int(current_bills))
-
-        real_time_entertainment = st.slider("Adjust Entertainment (£):", min_value=0, max_value=int(current_Entertainment + 1000), value=int(current_Entertainment))
-
-        real_time_savings = st.slider("Adjust Current Savings (£):", min_value=0, max_value=int(current_savings + 5000), value=int(current_savings))
-
-        real_time_other = st.slider("Adjust Other Expenses and Transportation (£):", min_value=0, max_value=int(current_savings + 5000), value=int(current_other))
-
+        real_time_Income = st.slider("Adjust Monthly Income (£):", min_value=0, max_value=int(current_Income + 5000),
+                                     value=int(current_Income))
+        real_time_bills = st.slider("Adjust Bills (£):", min_value=0, max_value=int(current_bills + 1000),
+                                    value=int(current_bills))
+        real_time_entertainment = st.slider("Adjust Entertainment (£):", min_value=0,
+                                            max_value=int(current_Entertainment + 1000), value=int(current_Entertainment))
+        real_time_savings = st.slider("Adjust Current Savings (£):", min_value=0, max_value=int(current_savings + 5000),
+                                      value=int(current_savings))
+        real_time_other = st.slider("Adjust Other Expenses and Transportation (£):", min_value=0,
+                                    max_value=int(current_savings + 5000), value=int(current_other))
         leftoverMoney = real_time_Income - real_time_bills - real_time_savings - real_time_other - real_time_entertainment
-
         updated_goal_status = "Met" if real_time_savings >= savings_goal else "not Met"
         st.info(f"You have {updated_goal_status} your Savings Goal")
         st.warning(f"You have {leftoverMoney} left over each month")
