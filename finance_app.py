@@ -437,7 +437,7 @@ elif selected_section == "Forecasting":
                 st.write(f"### Model Accuracy for {category}:")
                 st.write(f"Mean Absolute Error (MAE): {mae}")
                 st.write(f"Root Mean Squared Error (RMSE): {rmse}")
-                st.write(f"Mean Absolute Error (MAPE): {mape}")
+                st.write(f"Mean Absolute Percentage  Error (MAPE): {mape}")
 
                 # Store the forecasts in a dictionary
                 forecasts[category] = forecast_df
